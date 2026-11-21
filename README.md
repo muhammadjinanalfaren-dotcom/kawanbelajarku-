@@ -1,3 +1,5 @@
+**Paket revisi UI dan fitur** — Mulai dari [PASANG-REVISI.md](PASANG-REVISI.md). Dokumen di bawah mencatat versi dasar V2.
+
 # KawanBelajarku V2
 
 Mulai dari **[MULAI-DI-SINI.md](MULAI-DI-SINI.md)**. Hasil pengujian dan pemeriksaan yang perlu dijalankan di sekolah tercatat di **[PENGUJIAN.md](PENGUJIAN.md)**.

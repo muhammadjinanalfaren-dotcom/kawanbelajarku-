@@ -1,3 +1,5 @@
+**Paket revisi UI dan fitur** — Mulai dari [PASANG-REVISI.md](PASANG-REVISI.md). Dokumen di bawah mencatat versi dasar V2.
+
 # Memasang KawanBelajarku V2
 
 Paket ini melanjutkan **kawanbelajarku-remake-final.zip**. Konfigurasi publik di `assets/config.js` tetap menunjuk ke proyek Supabase lama. Instalasi situs berupa file statis tanpa npm, build, atau Edge Function. SQL harus dipasang terpisah di Supabase. Mengunggah situs saja belum mengaktifkan ruang kuis.

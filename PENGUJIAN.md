@@ -1,3 +1,5 @@
+**Paket revisi UI dan fitur** — Mulai dari [PASANG-REVISI.md](PASANG-REVISI.md). Dokumen di bawah mencatat versi dasar V2.
+
 # Pemeriksaan KawanBelajarku V2
 
 ## Dilakukan pada paket pengembangan
