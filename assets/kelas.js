@@ -21,7 +21,7 @@ async function list(){
 async function view(){
  const c=await api('view',{class_id:classId});
  if(c.staff)bank=await rpc('bank',{action:'list'});
- setView('<div class="teacher">'+heading(c.title,'Tugas dan aktivitas kelas','./kelas.html')+
+ setView('<div class="teacher">'+heading(c.title,'Tugas dan aktivitas kelas','./kelas.html')+button('Konten dan lampiran kelas','./konten.html#/'+encodeURIComponent(classId),'secondary')+
  (c.staff?section('Peserta kelas · '+c.members.length,'<div class="panel"><p>Kode undangan</p><b style="overflow-wrap:anywhere">'+esc(c.invite)+'</b><div class="stack">'+c.members.map(m=>'<div>'+esc(m.name)+' <button class="pill" data-remove="'+m.uid+'">Keluarkan</button></div>').join('')+'</div></div>')+
  section('Berikan tugas',bank.length?form('assign',field('Kuis','<select name="bank">'+bank.map(b=>opt(b.id,b.title)).join('')+'</select>')+field('Tenggat waktu lokal','<input type="datetime-local" name="due" required>')+'<label><input type="checkbox" name="retry"> Izinkan mengulang</label>','Bagikan tugas'):button('Buat kuis di bank soal','./guru.html')):'')+
  section('Daftar tugas',c.tasks.length?'<div class="stack">'+c.tasks.map(t=>{

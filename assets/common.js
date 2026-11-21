@@ -116,7 +116,7 @@ export async function identity() {
   if (!session) return null;
   const {user}=await checked(db.auth.getUser());
   if (!user) return null;
-  const profile=await checked(db.from('profiles').select('full_name,role').eq('id',user.id).maybeSingle());
+  const profile=await checked(db.from('profiles').select('*').eq('id',user.id).maybeSingle());
   if(profile && !user.is_anonymous && !['admin','teacher','guru'].includes(profile.role)){
     const effective=await checked(db.rpc('kb_live_role'));
     if(effective==='teacher')profile.role='teacher';
@@ -144,7 +144,7 @@ export const menus = [
   ['Langganan','gift','mint',learnUrl('langganan')],['Menu Lain','target','slate',learnUrl('menu')]
 ];
 export function brand(name='KawanBelajarku',href='./index.html') {
-  return '<a class="brand" href="'+href+'"><img src="./assets/brand.svg" width="35" height="35" alt=""><span>'+esc(name)+'</span></a>';
+  return '<a class="brand" href="'+href+'"><img src="./assets/brand.svg" width="35" height="35" alt=""><span>'+(name==='KawanBelajarku'?'<b>Kawan</b>Belajarku':esc(name))+'</span></a>';
 }
 export function shell(account,ui={},adminMode=false) {
   const name=ui?.name || 'KawanBelajarku';
@@ -164,9 +164,15 @@ export function shell(account,ui={},adminMode=false) {
     (adminMode ? '<nav class="adminnav" aria-label="Admin"><a href="./kelola.html">Kelola Data</a><a href="./guru.html">Guru</a><a href="./kelas.html">Kelas & pengguna</a><a href="./editor.html">Editor</a><a href="'+dashboard+'">Tampilan Siswa</a></nav>' :
       '<nav class="desktopnav" aria-label="Navigasi utama">'+nav(false)+'</nav><a class="topsearch textlink" href="'+learnUrl('cari')+'">Cari</a>')+
     '<a class="bell" aria-label="Notifikasi" href="'+learnUrl('pengumuman')+'"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 17h14l-2-4V9a5 5 0 0 0-10 0v4zM10 20q2 2 4 0"/></svg></a><details class="account-menu"><summary class="account" aria-label="Menu akun"><span class="avatar">'+
-    '<img src="./assets/faces/student-'+profileFace(account)+'.webp" alt="">'+'</span><span class="account-label">'+esc(account.name)+'</span></summary><div><a href="'+learnUrl('profil')+'">Pengaturan profil</a><button id="account-logout">Keluar</button></div></details></div></header>'+
+    '<img src="'+esc(accountAvatar(account))+'" alt="">'+'</span><span class="account-label">'+esc(account.name)+'</span></summary><div><a href="'+learnUrl('profil')+'">Pengaturan profil</a><button id="account-logout">Keluar</button></div></details></div></header>'+
     (adminMode?'':'<nav class="bottom" aria-label="Navigasi utama">'+nav(true)+'</nav>');
   const logout=document.querySelector('#account-logout');logout.onclick=()=>busy(logout,signOut);
 }
 
 export const profileFace = account => [0,1,2,3].includes(account.user.user_metadata?.kb_face) ? account.user.user_metadata.kb_face : 0;
+
+export function accountAvatar(account){
+ const meta=account.user.user_metadata||{};
+ if([0,1,2,3].includes(meta.kb_face))return './assets/faces/student-'+meta.kb_face+'.webp';
+ return safeUrl(account.profile?.avatar_url||meta.avatar_url)||'./assets/faces/student-0.webp';
+}

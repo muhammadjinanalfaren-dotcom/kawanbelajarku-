@@ -1,6 +1,7 @@
+import {showStreak} from './streak.js';
 import {subjectView,banners} from './subject.js';
 import {
-  profileFace,db,page,main,setView,esc,enc,byId,same,checked,guard,shell,button,empty,heading,section,toast,loadError,
+  accountAvatar,profileFace,db,page,main,setView,esc,enc,byId,same,checked,guard,shell,button,empty,heading,section,toast,loadError,
   busy,getRoute,dashboard,learnUrl,materialUrl,quizUrl,iconBox,tone,subjectIcon,date,menus,signOut,safeUrl
 } from './common.js';
 import {
@@ -29,24 +30,55 @@ function metrics() {
     [average,'Rata-rata skor'],[stat.pct+'%','Progres materi']].map(([value,label])=>'<div class="metric"><b>'+
     esc(value)+'</b><small>'+esc(label)+'</small></div>').join('')+'</div>';
 }
+const failed=new Map(),pendingTables=new Set();
+const homeDeps={
+ 'Progres belajar':['subjects','materials','progress'],'Misi harian':['quiz_results'],
+ 'Pilihan guru':['subjects','materials'],'Lanjutkan belajar':['subjects','materials','kb_material_activity'],
+ 'Pencapaian':['subjects','materials','progress','quiz_results'],'Pengumuman':['announcements']
+};
+function updateHomeSections(){
+ const nodes=[...main.querySelectorAll('.section')].map(el=>[el.querySelector('h2')?.textContent,el]);
+ nodes.push(['Progres belajar',main.querySelector('.profile-progress')]);
+ for(const [label,node] of nodes){
+  const deps=homeDeps[label];if(!deps||!node)continue;
+  const missing=deps.filter(t=>failed.has(t)),waiting=deps.some(t=>pendingTables.has(t));
+  if(!waiting&&!missing.length)continue;
+  const title=document.createElement('strong');title.textContent=label;node.replaceChildren(title);
+  if(waiting){const block=document.createElement('div');block.className='skeleton compact';block.ariaLabel='Mengambil data';node.append(block);}
+  else {const retry=document.createElement('button');retry.className='pill';retry.textContent='Coba lagi';
+   retry.onclick=e=>{e.preventDefault();void loadHome(missing);};node.append(retry);}
+ }
+}
+async function loadHome(names){
+ names.forEach(t=>{failed.delete(t);pendingTables.add(t);});
+ const paint=()=>{
+  if(getRoute('home')[0]!=='home')return;
+  const input=main.querySelector('.search-home input'),text=input?.value,focused=input===document.activeElement;
+  setView(home());updateHomeSections();
+  if(text||focused){const field=main.querySelector('.search-home input');field.value=text||'';if(focused)field.focus({preventScroll:true});}
+ };
+ paint();await Promise.all(names.map(async t=>{try{await refresh([t],uid());}catch(e){failed.set(t,e);}finally{pendingTables.delete(t);}}));
+ shell(account,data.config.ui);paint();
+}
 function home() {
   const st=statRows();
   const last=byId(materials(),latest()?.material_id);
-  const days=new Set(data.results.map(r=>r.completed_at?.slice(0,10)).filter(Boolean)).size;
-  const xp=st.n*20+days*10,gold=st.n*2+days;
+  const metrics=['level','xp','gold'].filter(k=>account.profile?.[k]!=null).map(k=>k==='level'?'Level '+esc(account.profile[k]):esc(account.profile[k])+' '+k.toUpperCase()).join(' · ');
   const badge=data.results.some(r=>Number(r.score)===100)?'Skor sempurna':st.n>=5?'Pembaca tekun':st.quizzes?'Kuis pertama':'';
   const role=account.admin?'Admin':['teacher','guru'].includes(account.profile?.role)?'Guru':'Siswa';
-  const today=new Date().toISOString().slice(0,10);
-  const mission=data.results.some(row=>row.completed_at?.slice(0,10)===today);
+  const day=v=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Jakarta'}).format(new Date(v));const today=day(Date.now());
+  const mission=data.results.some(row=>row.completed_at && day(row.completed_at)===today);
   const picks=data.materials.filter(m=>m.kb_recommended);
   const tiles=[5,1,2,3,4,8].map(i=>menus[i]);
-  return `<div class="profile-band"><div class="profile-id"><img src="./assets/faces/student-${profileFace(account)}.webp" alt=""><div><small>Akun ${role}</small><h1>${esc(account.name)}</h1><span>Level ${1+Math.floor(xp/100)} · ${xp} XP · ${gold} Gold</span></div></div><a class="profile-progress" href="${learnUrl('statistik')}"><small>Progres belajar</small><strong>${st.pct}%</strong><progress max="100" value="${st.pct}"></progress></a></div>
-  <form class="search-home" action="./belajar.html"><input name="q" type="search" required aria-label="Cari konten" placeholder="Cari materi, pelajaran, atau latihan…"><button class="btn">Cari</button></form>
-  <div class="home-layout"><div><div class="launch-grid">${tiles.map(([label,icon,theme,href])=>`<a class="tile" href="${href}" style="${tone(theme)}"><img class="tile-art" src="./assets/tile-${icon}.webp" alt=""><span>${label}</span></a>`).join('')}</div><a class="more-link" href="${learnUrl('menu')}">Menu Lain →</a>
-  ${section('Rekomendasi untukmu',banners(data.kb_banners)+'<section class="hero"><div class="hero-copy"><span class="eyebrow">Ruang eksplorasi</span><h2>Mengenal tata surya lebih dekat</h2>'+button('Mulai jelajahi',learnUrl('orbit'),'light')+'</div></section>')}
+  return `<div class="profile-band"><div class="profile-id"><img src="${esc(accountAvatar(account))}" alt=""><div><small>Akun ${role}</small><h1>${esc(account.name)}</h1><span>${metrics}</span>${account.profile?.is_premium===true?'<small class="paid">Premium</small>':''}</div></div><a class="profile-progress" href="${learnUrl('statistik')}"><small>Progres belajar</small><strong>${st.pct}%</strong><progress max="100" value="${st.pct}"></progress></a></div>
+  <form class="search-home" action="./belajar.html"><input name="q" type="search" required aria-label="Cari konten" placeholder="Cari materi, pelajaran, atau latihan…"><button class="search-submit" aria-label="Cari">⌕</button><a class="filter-link" href="./pelajaran.html#/semua" aria-label="Filter materi">☷</a></form>
+  <div class="home-layout"><div><div class="launch-grid">${tiles.map(([label,icon,theme,href])=>`<a class="tile" href="${href}" style="${tone(theme)}"><img class="tile-art" src="./assets/menu-${icon}.webp" alt=""><span>${label}</span></a>`).join('')}</div><a class="more-link" href="${learnUrl('menu')}">Menu Lain →</a>
+  ${section('Rekomendasi untukmu',banners(data.kb_banners||[])+'<section class="hero"><div class="hero-copy"><span class="eyebrow">Ruang eksplorasi</span><h2>Mengenal tata surya lebih dekat</h2>'+button('Mulai jelajahi','./tata-surya.html','light')+'</div></section>')}
+  ${section('Misi harian','<a class="panel row" href="./latihan.html"><img width="46" src="./assets/tile-target.webp" alt=""><div><h3>Selesaikan satu kuis mandiri</h3><small>'+(mission?'Selesai hari ini':'0 dari 1 kuis')+'</small></div></a>')}
+  ${section('Pilihan belajar','<a class="lang-card" href="./bahasa.html"><strong>Bahasa</strong><span>Indonesia · Inggris · Jepang →</span></a>')}
   ${section('Pilihan guru',materialCards(picks,'Guru belum memilih materi untuk minggu ini.'),learnUrl('pilihan'))}</div>
-  <aside>${section('Kuis live','<div class="panel live-call"><h3>Gabung ruang kuis</h3><p>Siapkan kode dari guru untuk masuk bersama teman sekelas.</p>'+button('Masukkan kode','./live.html')+'</div>')}
-  ${section('Misi harian','<a class="panel row" href="./latihan.html"><img width="46" src="./assets/tile-target.webp" alt=""><div><h3>Selesaikan satu kuis mandiri</h3><small>'+(mission?'Selesai hari ini':'0 dari 1 kuis')+' · 10 XP dan 1 Gold</small></div></a>')}
+  <aside>${section('Kuis live','<div class="panel live-call"><h3>Gabung ruang kuis</h3><p>Siapkan kode dari host untuk masuk bersama teman sekelas.</p>'+button('Masukkan kode','./live.html')+'</div>')}
+
   ${section('Lanjutkan belajar',last?materialCards([last]):empty('Materi terakhir yang kamu buka akan muncul di sini.'),'./pelajaran.html')}
   ${section('Pencapaian',badge?button(badge,learnUrl('pencapaian'),'ghost'):empty('Lencana pertamamu terbuka setelah kamu menyelesaikan satu kuis mandiri.'))}
   ${section('Pengumuman',announcements(newest(data.announcements).slice(0,2)),learnUrl('pengumuman'))}</aside></div>`;
@@ -73,7 +105,7 @@ function library(route,id) {
   const lastSubject=byId(materials(),latest()?.material_id)?.subject_id;
   const subject=route==='mapel'?byId(data.subjects,id):route==='home'?(byId(data.subjects,lastSubject)||data.subjects[0]):null;
   if (route==='mapel' && !subject) { setView(heading('Mata pelajaran tidak ditemukan','','./pelajaran.html')); return; }
-  if(subject){subjectView(subject,account,profileFace(account));return;}
+  if(subject){subjectView(subject,account,accountAvatar(account));return;}
   const base=materials().filter(item=>(!isSaved || saved(item.id)) && (!subject || same(subject.id,item.subject_id)));
   const categories=[...new Set(base.map(category).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'id'));
   const subjects=[['','Semua mata pelajaran'],...data.subjects.map(s=>[s.id,s.name])];
@@ -140,7 +172,7 @@ function drawMaterialActions(id) {
     await materialAction(id,action,!active);
     await refresh([action==='complete'?'progress':'kb_material_activity'],uid());
     if (same(getRoute('home')[1],id)) drawMaterialActions(id);
-    toast('Perubahan tersimpan.');
+    toast('Perubahan tersimpan.');if(action==='complete'&&!active)await showStreak();
   }));
 }
 async function openAttachment(control) {
@@ -210,7 +242,7 @@ function drawQuiz() {
     active.sending=true;
     main.querySelectorAll('[data-number],[name=answer]').forEach(el=>el.disabled=true);
     try {
-      const result=await checked(db.rpc('kb_submit_quiz',{p_attempt:active.id,p_answers:answers}));
+      const result=await checked(db.rpc('kb_submit_quiz',{p_attempt:active.id,p_answers:answers}));void showStreak().catch(()=>{});
       try { sessionStorage.removeItem(draftKey(active.id)); } catch {}
       try { await refresh(['quiz_results'],uid()); }
       catch { toast('Skor sudah tersimpan. Muat ulang untuk memperbarui riwayat.',true); }
@@ -279,31 +311,13 @@ function badgePage() {
     '<div class="grow"><h3>'+title+'</h3><p>'+description+'</p><small class="tag '+(got?'success':'locked')+'">'+(got?'Didapat':'Terkunci')+
     '</small></div></article>').join('')+'</div>';
 }
-const planets=[
-  ['Merkurius','Paling dekat dengan Matahari. Satu tahun di Merkurius sekitar 88 hari Bumi.'],
-  ['Venus','Atmosfer tebalnya memerangkap panas. Venus adalah planet terpanas di tata surya.'],
-  ['Bumi','Memiliki air cair yang melimpah di permukaan dan satu satelit alami, Bulan.'],
-  ['Mars','Permukaannya tampak kemerahan karena mineral besi yang teroksidasi.'],
-  ['Jupiter','Planet terbesar di tata surya. Bintik Merah Besar merupakan badai raksasa.'],
-  ['Saturnus','Cincinnya tersusun dari banyak bongkahan es dan batu dengan ukuran beragam.'],
-  ['Uranus','Sumbu rotasinya sangat miring sehingga tampak menggelinding saat mengorbit Matahari.'],
-  ['Neptunus','Planet terjauh dari Matahari. Atmosfernya memiliki angin yang sangat kencang.']
-];
-function orbit() {
-  return heading('Jelajahi tata surya','Pilih planet untuk membaca fakta singkatnya.',learnUrl('eksplorasi'))+
-    '<div class="orbit-lab"><figure><img src="./assets/orbit.webp" width="1440" height="960" alt="Ilustrasi planet bercincin dan roket">'+
-    '<figcaption>Ilustrasi artistik tata surya.</figcaption></figure></div>'+
-    '<section class="section panel"><div class="tabs" id="planet-tabs" aria-label="Planet">'+planets.map(([name],i)=>
-      '<button class="pill" type="button" data-planet="'+i+'"'+(i===0?' aria-current="true"':'')+'>'+name+'</button>').join('')+
-    '</div><div id="planet-fact" class="stack" aria-live="polite"><h2>'+planets[0][0]+'</h2><p>'+planets[0][1]+'</p></div></section>';
-}
 function learning(route) {
   const pages={
-    agenda,statistik:statPage,pencapaian:badgePage,orbit,
+    agenda,statistik:statPage,pencapaian:()=>badgePage()+button('Kalender streak','./streak.html'),
     pilihan:()=>heading('Pilihan Minggu Ini','Materi pilihan admin atau materi terbaru dari perpustakaan.',dashboard)+materialCards(recommendations()),
     pengumuman:()=>heading('Notifikasi','Kabar dari kelas dan aktivitas belajarmu.',dashboard)+section('Tugas dan tenggat',data.notices?.length?data.notices.map(t=>button(t.title+' · '+date(t.due,true),'./kelas.html?id='+enc(t.class_id),'ghost')).join(''):empty('Tidak ada tugas yang menunggu.'))+section('Pengumuman',announcements(newest(data.announcements)))+section('Hasil kuis mandiri',historyTable(newest(data.results,'completed_at').slice(0,3)))+section('Sesi live selesai',data.liveHistory?.filter(r=>r.status==='finished').map(r=>button(r.title,'./live.html?room='+enc(r.code),'ghost')).join('')||empty('Belum ada hasil live.'))+section('Pencapaian',button('Lihat lencana akun',learnUrl('pencapaian'),'secondary')),
     eksplorasi:()=>heading('Ruang Eksplorasi','Belajar lewat konten interaktif dan koleksi tambahan.',dashboard)+
-      '<a class="hero" href="'+learnUrl('orbit')+'"><div class="hero-copy"><h2>Jelajahi tata surya</h2><p>Pilih planet dan baca fakta singkatnya.</p>'+
+      '<a class="hero" href="./tata-surya.html"><div class="hero-copy"><h2>Jelajahi tata surya</h2><p>Pilih planet dan baca fakta singkatnya.</p>'+
       '<span class="btn light">Mulai eksplorasi</span></div></a>'+section('Koleksi eksplorasi',features(data.features)),
     langganan:()=>{
       const plan=data.config.subscription;
@@ -324,7 +338,7 @@ function learning(route) {
       '<details><summary>Tautan reset kata sandi kedaluwarsa</summary><p>Kembali ke halaman pemulihan dan kirim tautan baru ke email akunmu.</p></details>'+
       '<details><summary>Soal kuis gagal dimuat</summary><p>Coba muat ulang. Jika ada pesan bahwa soal perlu diperbaiki, sampaikan judul kuis ke admin sekolah.</p></details></div>',
     menu:()=>heading('Menu Lain','Kelola akun dan buka fitur tambahan.',dashboard)+'<div class="grid">'+[
-      ['Kelas dan tugas','cal','./kelas.html'],['Kuis Live','clip','./live.html'],...(['teacher','guru','admin'].includes(account.profile?.role)?[['Ruang Guru','laptop','./guru.html']]:[]),['Cari konten','target',learnUrl('cari')],['Profil akun','chat',learnUrl('profil')],['Bantuan','book',learnUrl('bantuan')],
+      ['Bahasa','book','./bahasa.html'],['Eksplorasi Tata Surya','flask','./tata-surya.html'],['Streak belajar','target','./streak.html'],['Konten kelas','books','./konten.html'],['Kelas dan tugas','cal','./kelas.html'],['Kuis Live','clip','./live.html'],...(['teacher','guru','admin'].includes(account.profile?.role)?[['Ruang Guru','laptop','./guru.html']]:[]),['Cari konten','target',learnUrl('cari')],['Profil akun','chat',learnUrl('profil')],['Bantuan','book',learnUrl('bantuan')],
       ['Pengumuman','clip',learnUrl('pengumuman')],...(account.admin?[['Panel admin','laptop','./kelola.html']]:[])
     ].map(([name,mark,href])=>'<a class="card row" href="'+href+'">'+iconBox(mark)+'<h3>'+name+'</h3></a>').join('')+
       '</div>'+section('Fitur tambahan',features(data.features))+'<div class="actions">'+
@@ -400,19 +414,15 @@ function wireLearn() {
     if (!q) { target.innerHTML=empty('Ketik kata kunci untuk memulai.'); return; }
     const subjects=filtered(data.subjects,q,s=>[s.name,s.description]);
     const chapters=filtered(data.kb_chapters,q,c=>[c.title,c.description,c.summary]);
-    target.innerHTML=section('Materi',materialCards(filtered(materials(),q,m=>[m.title,m.description,m.kb_category,subjectName(m.subject_id)]),
+    const destinations=[['Bahasa · Indonesia, Inggris, Jepang','./bahasa.html'],['Kuis Live','./live.html'],['Eksplorasi Tata Surya','./tata-surya.html'],['Konten kelas dan tugas','./konten.html'],['Kalender streak','./streak.html']];
+    target.innerHTML=filtered(destinations,q,x=>[x[0]]).map(x=>button(x[0],x[1],'secondary')).join('')+section('Materi',materialCards(filtered(materials(),q,m=>[m.title,m.description,m.kb_category,subjectName(m.subject_id)]),
       'Tidak ada materi yang cocok.'))+section('Kuis',quizCards(filtered(quizzes(),q,k=>[k.title,k.description,subjectName(k.subject_id)])))+
       section('Mata pelajaran',subjects.length?'<div class="grid">'+subjects.map(s=>'<a class="card" href="./pelajaran.html#/mapel/'+enc(s.id)+
         '"><h3>'+esc(s.name)+'</h3></a>').join('')+'</div>':empty('Tidak ada mata pelajaran yang cocok.'))+
       section('Bab',chapters.length?chapters.map(c=>button(c.title,'./pelajaran.html#/mapel/'+enc(c.subject_id),'ghost')).join(''):empty('Tidak ada bab yang cocok.'))+
       section('Fitur tambahan',features(filtered(data.features,q,f=>[f.title,f.description])));
   };
-  main.querySelectorAll('[data-planet]').forEach(control=>control.onclick=()=>{
-    const [name,fact]=planets[Number(control.dataset.planet)];
-    main.querySelector('[data-planet][aria-current]')?.removeAttribute('aria-current');
-    control.setAttribute('aria-current','true');
-    main.querySelector('#planet-fact').innerHTML='<h2>'+name+'</h2><p>'+fact+'</p>';
-  });
+
   const form=main.querySelector('#profile-form');
   if (form) form.onsubmit=event=>{
     event.preventDefault();
@@ -444,7 +454,7 @@ async function render() {
     if (page==='dashboard') {
       if (route==='latihan' || route==='kuis' || route==='riwayat') { location.replace(id?quizUrl(id):'./latihan.html'+(route==='riwayat'?'#/riwayat':'')); return; }
       if (['agenda','statistik','pilihan','pencapaian','menu','pengumuman'].includes(route)) { location.replace(learnUrl(route)); return; }
-      setView(home());
+      setView(home());updateHomeSections();
     } else if (page==='library') {
       if (['materi','fitur'].includes(route) && id) {
         setView('<p class="loading" role="status">Memuat konten…</p>');
@@ -458,6 +468,7 @@ async function render() {
       if (route==='kuis' && id) await takeQuiz(id,serial);
       else setView(quizList(route));
     } else {
+      if(route==='orbit'){location.replace('./tata-surya.html');return;}
       if(route==='pengumuman'){[data.notices,data.liveHistory]=await Promise.all([checked(db.rpc('kb_live_class',{action:'notices'})),checked(db.rpc('kb_live_history'))]);if(serial!==routeNumber)return;}
       setView(learning(route));
       wireLearn();
@@ -469,8 +480,9 @@ async function start() {
   account=await guard();
   if (!account) return;
   shell(account);
-  await refresh([...tablesForPage[page],'site_config'],uid());
-  await render();
+  if(page==='dashboard'&&getRoute('home')[0]==='home'){await loadHome([...tablesForPage.dashboard,'site_config']);}
+  else await refresh([...tablesForPage[page],'site_config'],uid());
+  if(page!=='dashboard'||getRoute('home')[0]!=='home')await render();
   addEventListener('hashchange',()=>{
     if (location.hash==='#main') return;
     render();

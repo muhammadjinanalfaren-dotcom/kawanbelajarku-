@@ -1,3 +1,4 @@
+import {showStreak} from './streak.js';
 import {db,main,checked,identity,esc,button,setView,heading,busy,loadError,readableError,section,empty,toast} from './common.js';
 import {rpc,animals,face,field,fmt,statuses,answerFields,collect,livebar} from './live-shared.js';
 let code='',state,offset=0,inFlight=false,queued=false,stamp='',autotime='',account;
@@ -8,7 +9,7 @@ const ctl=(key,label)=>'<button type="button" class="btn secondary" data-act="'+
 const go=()=>location.assign('./live.html?room='+encodeURIComponent(code));
 async function entrance(){
  const history=account?await rpc('history'):[];
- frame(heading('Gabung kuis live','Masukkan enam karakter yang dibagikan guru.')+'<form id="check" class="panel form">'+field('Kode ruang','<input name="code" autocapitalize="characters" maxlength="6" pattern="[a-fA-F0-9]{6}" required placeholder="Kode 6 karakter">')+'<button class="btn">Periksa kode</button></form>'+
+ frame(heading('Kuis Live','Buat ruang atau masuk bersama teman.')+(account&&!account.user.is_anonymous?'<div class="actions">'+button('Buat Kuis','./guru.html#buat')+button('Kuis Saya','./guru.html','secondary')+'</div>':'')+heading('Gabung dengan Kode')+'<form id="check" class="panel form">'+field('Kode ruang','<input name="code" autocapitalize="characters" maxlength="6" pattern="[a-fA-F0-9]{6}" required placeholder="Kode 6 karakter">')+'<button class="btn">Periksa kode</button></form>'+
  (!account||account.user.is_anonymous?'<p><a class="textlink" href="./index.html">Masuk dengan akun sekolah</a> atau lanjut sebagai tamu jika diizinkan.</p>':'')+
  (history.length?section('Riwayat ruang','<div class="stack">'+history.map(r=>button(r.title+' · '+statuses[r.status],'./live.html?room='+r.code,'ghost')).join('')+'</div>'):''));
  $('check').onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{
@@ -32,22 +33,22 @@ const standingRows=board=>board.map(x=>'<p>'+x.ranking+'. '+esc(x.name)+' · '+x
 function draw(s){
  const q=s.question, active=s.status==='active',wait=s.status==='waiting';
  let body='';
- if(wait){body='<div class="live-hero"><small>Kode ruang</small><div class="room-code">'+code+'</div><p>'+(s.locked?'Lobi dikunci.':'Menunggu guru memulai.')+'</p></div>';}
+ if(wait){body='<div class="live-hero"><small>Kode ruang</small><div class="room-code">'+code+'</div><p>'+(s.locked?'Lobi dikunci.':'Menunggu host memulai.')+'</p></div>';}
  if(wait&&!s.host&&s.config.ready)body+=ctl('ready',s.ready?'Batalkan siap':'Saya siap');
- if(s.status==='paused')body=empty('Sesi dijeda. Tunggu guru melanjutkan.');
+ if(s.status==='paused')body=empty('Sesi dijeda. Tunggu host melanjutkan.');
  if(s.status==='cancelled')body=empty('Guru membatalkan sesi ini.');
  if(active && q){
- body='<div class="room-strip"><b>Soal '+(s.pos+1)+' dari '+s.total+'</b>'+(s.config.seconds&&!s.host?'<span id="timer"></span>':'')+'</div><progress class="progress-meter" value="'+(s.pos+1)+'" max="'+s.total+'"></progress>'+
+ body='<div class="room-strip"><b>Soal '+(s.pos+1)+' dari '+s.total+'</b>'+(s.config.seconds&&s.name?'<span id="timer"></span>':'')+'</div><progress class="progress-meter" value="'+(s.pos+1)+'" max="'+s.total+'"></progress>'+
  '<section class="panel stack"><h2>'+esc(q.text)+'</h2>'+(q.image?'<img class="photo-q" src="'+esc(q.image)+'" alt="Gambar soal">':'')+
- (s.host?'':s.accepted?empty(s.feedback?(s.feedback.correct?'Benar. ':'Jawaban tersimpan. ')+'Kunci: '+fmt(s.feedback.key):'Jawaban tersimpan. Tunggu soal berikutnya.'):'<form id="answer" class="form">'+answerFields(q)+'<button class="btn">Kirim jawaban</button></form>')+'</section>';
+ (!s.name?'':s.accepted?empty(s.feedback?(s.feedback.correct?'Benar. ':'Jawaban tersimpan. ')+'Kunci: '+fmt(s.feedback.key):'Jawaban tersimpan. Tunggu soal berikutnya.'):'<form id="answer" class="form">'+answerFields(q)+'<button class="btn">Kirim jawaban</button></form>')+'</section>';
  }
- if(active && !q)body=empty('Semua jawabanmu tersimpan. Hasil akan muncul saat guru menutup sesi.');
+ if(active && !q)body=empty('Semua jawabanmu tersimpan. Hasil akan muncul saat host menutup sesi.');
  if(s.host && !['finished','cancelled'].includes(s.status)){
  body+='<div class="controls">'+(wait?ctl('start','Mulai kuis')+ctl(s.locked?'unlock':'lock',s.locked?'Buka lobi':'Kunci lobi')+ctl('cancel','Batalkan sesi'):ctl(active?'pause':'resume',active?'Jeda':'Lanjutkan')+(active&&s.config.mode==='host'&&s.pos+1<s.total?ctl('next','Soal berikutnya'):'')+ctl('finish','Akhiri sesi'))+'</div>';
  }
  if(wait||s.host&&active)body+=section('Peserta · '+s.members.length,s.members.length?'<div class="people">'+s.members.map(x=>'<span class="person">'+face(x.avatar)+esc(x.name)+(wait&&x.ready?' · Siap':'')+(s.host&&active?' · '+x.submitted+'/'+s.total:'')+(wait&&s.host?'<button class="pill" data-kick="'+esc(x.uid)+'" aria-label="Keluarkan '+esc(x.name)+'">×</button>':'')+'</span>').join('')+'</div>':empty('Bagikan kode di atas agar siswa bisa bergabung.'));
  if(s.board && (active||s.status==='paused')) body+='<details class="panel"><summary>Peringkat sementara</summary><div id="standings">'+standingRows(s.board)+'</div></details>';
- if(s.status==='finished')body=results(s);
+ if(s.status==='finished'){body=results(s);if(s.result&&!account?.user.is_anonymous)void showStreak().catch(()=>{});}
  frame(heading(s.title,statuses[s.status]+' · '+(s.config.mode==='host'?'Dipandu guru':'Kecepatan sendiri'))+
  (active&&s.name?'<span class="person">'+face(s.avatar)+esc(s.name)+'</span>':'')+body+'<small id="connection" class="status-strip" role="status"></small>');
  const form=$('answer');if(form)form.onsubmit=e=>{e.preventDefault();busy(e.submitter,async()=>{const res=await action('answer',{pos:s.pos,answer:collect(q,form)});if(res.feedback)toast(res.feedback+' · '+fmt(res.key));await sync();});};
@@ -77,7 +78,7 @@ async function start(){
  const s=state,el=$('timer');if(!el||!s?.tick||!s.config.seconds||s.accepted)return;
  const left=Math.max(0,Math.ceil((Date.parse(s.tick)+s.config.seconds*1000-Date.now()-offset)/1000));el.textContent=left+' detik';
  const marker=s.pos+'-'+s.tick;
- if(left===0&&!s.host&&autotime!==marker){autotime=marker;try{await action('answer',{pos:s.pos,answer:null});await sync();}catch(e){autotime='';toast(readableError(e),true);}}
+ if(left===0&&s.name&&autotime!==marker){autotime=marker;try{await action('answer',{pos:s.pos,answer:null});await sync();}catch(e){autotime='';toast(readableError(e),true);}}
  },300);addEventListener('pagehide',()=>{clearInterval(timer);clearInterval(poll);db.removeChannel(ch);},{once:true});
 }
 start().catch(loadError);

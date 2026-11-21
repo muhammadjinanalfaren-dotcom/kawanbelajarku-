@@ -8,10 +8,12 @@ export function subjectView(s,account,face){
  const related=(item,list)=>list.filter(x=>String(x.kb_chapter)===String(item.id));
  const matches=(text)=>String(text||'').toLocaleLowerCase().includes(query.toLocaleLowerCase());
  const next=base.find(m=>!complete(m.id))||base[0], art=safeUrl(s.kb_image);
+ const semesters=[...new Set([...chapters.map(c=>c.semester),...base.map(m=>/^Semester ([12])$/.exec(m.kb_category)?.[1])].filter(Boolean).map(String))].sort();
+ const pct=base.length?Math.round(base.filter(m=>complete(m.id)).length*100/base.length):0;
  const target=document.querySelector('#main');
- target.innerHTML='<div class="lesson-profile"><img width="42" src="./assets/faces/student-'+face+'.webp" alt=""><b>'+esc(account.name)+'</b><a class="textlink" href="./pelajaran.html#/semua">Semua pelajaran</a></div><label class="field search-home"><input id="chapter-search" type="search" placeholder="Cari bab atau materi" aria-label="Cari bab atau materi"></label>'+
- '<section class="lesson-hero">'+(art?'<img alt="" src="'+esc(art)+'">':subjectIcon(s,data.config.style))+'<div><small>'+esc(s.kb_grade||'Mata pelajaran')+'</small><h1>'+esc(s.name)+'</h1><p>'+esc(s.description||'')+'</p>'+(next?button('Lanjut belajar',materialUrl(next.id)):'')+'</div></section>'+
- '<div class="tabs section" id="subject-tabs">'+['Materi','Latihan','Ringkasan','Info'].map(x=>'<button class="pill" data-tab="'+x+'">'+x+'</button>').join('')+'</div><label class="field">Semester<select id="semester"><option value="">Semua semester</option><option value="1">Semester 1</option><option value="2">Semester 2</option></select></label><div id="chapters"></div>';
+ target.innerHTML='<div class="lesson-profile"><img width="42" src="'+esc(face)+'" alt=""><div><b>'+esc(account.name)+'</b><small class="lesson-pct">Progres pelajaran · '+pct+'%</small></div><a class="textlink" href="./pelajaran.html#/semua">Semua pelajaran</a></div><label class="field search-home"><input id="chapter-search" type="search" placeholder="Cari bab atau materi" aria-label="Cari bab atau materi"></label>'+
+ '<section class="lesson-hero">'+(art?'<img alt="" src="'+esc(art)+'">':/matematika/i.test(s.name)?'<img src="./assets/matematika.webp" alt="">':subjectIcon(s,data.config.style))+'<div><small>'+esc(s.kb_grade||'Mata pelajaran')+'</small><h1>'+esc(s.name)+'</h1><p>'+esc(s.description||'')+'</p>'+(next?button('Lanjut belajar',materialUrl(next.id)):'')+'</div></section>'+
+ '<div class="tabs section" id="subject-tabs">'+['Materi','Latihan','Ringkasan','Info'].map(x=>'<button class="pill" data-tab="'+x+'">'+x+'</button>').join('')+'</div><label class="field" '+(semesters.length?'':'hidden')+'>Semester<select id="semester"><option value="">Semua semester</option>'+semesters.map(n=>'<option>'+esc(n)+'</option>').join('')+'</select></label><div id="chapters"></div>';
  target.setAttribute('aria-busy','false');
  function draw(){
  target.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',String(tab===b.dataset.tab)));
@@ -22,7 +24,7 @@ export function subjectView(s,account,face){
  const rows=list.map(c=>{
  const all=related(c,base),filtered=matches(c.title)?all:all.filter(m=>matches(m.title));if(query&&!matches(c.title)&&!filtered.length)return '';
  const done=all.filter(m=>complete(m.id)).length,pct=all.length?Math.round(100*done/all.length):0;
- return '<details class="panel chapter" '+(query?'open':'')+'><summary>'+subjectIcon(s,data.config.style)+'<span><small>Semester '+c.semester+' · Bab '+c.position+'</small><strong>'+esc(c.title)+'</strong><progress max="100" value="'+pct+'"></progress></span><b>'+(!all.length?'Kosong':pct===100?'Selesai':done?'Lanjut':'Mulai')+'</b></summary><p>'+esc(c.description)+'</p>'+materialCards(filtered)+'</details>';
+ return '<details class="panel chapter" '+(query?'open':'')+'><summary>'+subjectIcon(s,data.config.style)+'<span><small>Semester '+c.semester+' · Bab '+c.position+'</small><strong>'+esc(c.title)+'</strong><progress max="100" value="'+pct+'"></progress><small>'+pct+'%</small></span><b>'+(!all.length?'Kosong':pct===100?'Selesai':done?'Lanjut':'Mulai')+'</b></summary><p>'+esc(c.description)+'</p>'+materialCards(filtered)+'</details>';
  }).join('');
  const uncategorized=base.filter(m=>!m.kb_chapter&&matches(m.title)&&(!sem||m.kb_category==='Semester '+sem));
  out.innerHTML=section('Daftar bab',rows||empty('Belum ada bab yang cocok.'))+(uncategorized.length?section('Materi tanpa bab',materialCards(uncategorized)):'');
