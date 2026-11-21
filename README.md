@@ -45,3 +45,4 @@ Dokumentasi [Cloudflare Pages Static HTML](https://developers.cloudflare.com/pag
 - Lulus simulasi JavaScript dengan respons Supabase tiruan untuk masuk dan role, pendaftaran, pemulihan, materi, bookmark, progres, agenda, navigasi dan pengiriman kuis, riwayat skor, pengelolaan mapel/soal/pengumuman, unggah lampiran serta info langganan.
 - CSS dirancang untuk layar mobile dan desktop. Pengujian visual di browser tidak selesai karena browser lokal gagal dijalankan di lingkungan ini.
 - SQL ditinjau terhadap struktur yang teramati di ZIP lama. SQL, RLS, reset email, dan Storage privat belum dijalankan di Supabase produksi. Deployment Cloudflare juga belum dilakukan.
+Trigger Cloudflare rebuild
